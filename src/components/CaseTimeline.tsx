@@ -1,4 +1,5 @@
 // src/components/CaseTimeline.tsx
+import ReactPlayer from 'react-player';
 import React, { useState, useEffect } from 'react';
 import type { CaseTimelineResponse } from '../types';
 import { fetchCaseTimeline } from '../api';
@@ -14,9 +15,10 @@ export const CaseTimeline: React.FC<CaseTimelineProps> = ({ caseId, token }) => 
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
-        if (!caseId || !token) {
+        // Make caseId the only strictly required parameter for public viewing
+        if (!caseId) {
             setLoading(false);
-            setError('Missing case ID or authentication token.');
+            setError('Missing case ID.');
             return;
         }
 
@@ -26,7 +28,8 @@ export const CaseTimeline: React.FC<CaseTimelineProps> = ({ caseId, token }) => 
             try {
                 setLoading(true);
                 setError(null);
-                const data = await fetchCaseTimeline(caseId, token);
+                // Pass token safely even if empty string or null
+                const data = await fetchCaseTimeline(caseId, token || '');
                 if (isMounted) setTimeline(data);
             } catch (err: unknown) {
                 if (isMounted) {
@@ -143,37 +146,54 @@ export const CaseTimeline: React.FC<CaseTimelineProps> = ({ caseId, token }) => 
                                             Linked Media ({milestone.videos.length})
                                         </h3>
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                            {milestone.videos.map((video) => (
-                                                <div
-                                                    key={video.id}
-                                                    className="bg-slate-950/80 p-4 rounded-md border border-slate-800/80 flex flex-col justify-between hover:border-slate-700 transition-colors"
-                                                >
-                                                    <div>
-                                                        <div className="flex items-start justify-between gap-2">
-                                                            <h4 className="font-semibold text-sm text-slate-200 line-clamp-2">
-                                                                {video.title || video.youtube_video_id}
-                                                            </h4>
-                                                        </div>
-                                                        <p className="text-xs text-slate-400 mt-1">
-                                                            Channel: {video.channel_name || 'Unknown'}
-                                                        </p>
-                                                        {video.summary && (
-                                                            <p className="text-xs text-slate-300 mt-2 line-clamp-3 bg-slate-900/60 p-2 rounded border border-slate-800">
-                                                                {video.summary}
-                                                            </p>
-                                                        )}
-                                                    </div>
+                                            {milestone.videos.map((video) => {
+                                                // Constructs full URL whether your API returns a full URL or just the video ID
+                                                const videoUrl = `https://www.youtube.com/watch?v=${video.youtube_video_id}`;
 
-                                                    <div className="mt-3 pt-2 border-t border-slate-900 flex items-center justify-between">
-                                                        {renderStatusBadge(video.status)}
-                                                        {video.category && (
-                                                            <span className="text-[11px] text-slate-400 font-mono">
-                                                                {video.category}
-                                                            </span>
-                                                        )}
+                                                return (
+                                                    <div
+                                                        key={video.id}
+                                                        className="bg-slate-950/80 p-4 rounded-md border border-slate-800/80 flex flex-col justify-between hover:border-slate-700 transition-colors"
+                                                    >
+                                                        <div>
+                                                            <div className="flex items-start justify-between gap-2 mb-3">
+                                                                <h4 className="font-semibold text-sm text-slate-200 line-clamp-2">
+                                                                    {video.title || video.youtube_video_id}
+                                                                </h4>
+                                                            </div>
+
+                                                            {/* YouTube Video Player */}
+                                                            <div className="aspect-video w-full overflow-hidden rounded-lg bg-black border border-slate-800 my-2">
+                                                                <iframe
+                                                                    className="w-full h-full"
+                                                                    src={`https://www.youtube.com/embed/${video.youtube_video_id}`}
+                                                                    title={video.title || 'YouTube Video'}
+                                                                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                                                    allowFullScreen
+                                                                />
+                                                            </div>
+
+                                                            <p className="text-xs text-slate-400 mt-2">
+                                                                Channel: {video.channel_name || 'Unknown'}
+                                                            </p>
+                                                            {video.summary && (
+                                                                <p className="text-xs text-slate-300 mt-2 line-clamp-3 bg-slate-900/60 p-2 rounded border border-slate-800">
+                                                                    {video.summary}
+                                                                </p>
+                                                            )}
+                                                        </div>
+
+                                                        <div className="mt-3 pt-2 border-t border-slate-900 flex items-center justify-between">
+                                                            {renderStatusBadge(video.status)}
+                                                            {video.category && (
+                                                                <span className="text-[11px] text-slate-400 font-mono">
+                                                                    {video.category}
+                                                                </span>
+                                                            )}
+                                                        </div>
                                                     </div>
-                                                </div>
-                                            ))}
+                                                );
+                                            })}
                                         </div>
                                     </div>
                                 )}
