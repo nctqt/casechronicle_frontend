@@ -67,7 +67,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onLoginSuccess }) => {
                     </svg>
                 </div>
                 <h2 className="text-2xl font-bold tracking-tight text-slate-100">
-                    {isRegistering ? 'Create an Account' : 'Sign in to Time Capsule'}
+                    {isRegistering ? 'Create an Account' : 'Sign in to Case Chronicle'}
                 </h2>
                 <p className="text-xs text-slate-400 font-mono">
                     {isRegistering ? 'Register to submit media analysis & timelines' : 'Access full case notes and management tools'}

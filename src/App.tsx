@@ -57,7 +57,7 @@ export function App() {
     <div className="min-h-screen bg-slate-950 text-slate-100 p-6">
       <header className="max-w-4xl mx-auto mb-6 flex items-center justify-between border-b border-slate-800 pb-4">
         <div className="flex items-center gap-4">
-          <h1 className="text-xl font-bold tracking-tight text-slate-100">True Crime Time Capsule</h1>
+          <h1 className="text-xl font-bold tracking-tight text-slate-100">CaseChronicle</h1>
 
           {/* Case Selector Dropdown (Available to everyone) */}
           {cases.length > 0 && (
