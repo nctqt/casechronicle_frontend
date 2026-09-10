@@ -9,15 +9,16 @@ import { AdminDashboard } from './components/AdminDashboard';
 interface CaseItem {
   id: string;
   title: string;
+  description?: string;
 }
 
 export function App() {
   const [token, setToken] = useState<string | null>(localStorage.getItem('token'));
-  const [cases, setCases] = useState<CaseItem[]>([]);
   const [selectedCaseId, setSelectedCaseId] = useState<string>('');
   const [isAddCaseOpen, setIsAddCaseOpen] = useState<boolean>(false);
   const [isLoginOpen, setIsLoginOpen] = useState<boolean>(false);
   const [currentView, setCurrentView] = useState<'timeline' | 'admin'>('timeline');
+  const [cases, setCases] = useState<CaseItem[]>([]);
 
   const claims = parseJwt(token);
   const isAdmin = claims?.role === 'admin';
@@ -30,10 +31,15 @@ export function App() {
 
   const loadCases = async () => {
     try {
-      const res = await fetch('/api/v1/cases');
+      // Include authorization token if required by your backend routes, 
+      // or keep it public if your GET cases endpoint is public.
+      const headers: Record<string, string> = {};
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
+      const res = await fetch('/api/v1/cases', { headers });
       if (res.ok) {
         const data = await res.json();
-        setCases(data);
+        setCases(data || []);
         if (data.length > 0 && !selectedCaseId) {
           setSelectedCaseId(data[0].id);
         }
@@ -45,7 +51,7 @@ export function App() {
 
   useEffect(() => {
     loadCases();
-  }, []);
+  }, [token]);
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 p-6">
@@ -58,7 +64,7 @@ export function App() {
             <select
               value={selectedCaseId}
               onChange={(e) => setSelectedCaseId(e.target.value)}
-              className="bg-slate-900 border border-slate-800 text-slate-200 text-sm rounded-lg px-3 py-1.5 focus:border-blue-500 focus:outline-none"
+              className="bg-slate-900 border border-slate-800 text-slate-200 text-sm rounded-lg px-3 py-1.5 focus:border-blue-500 focus:outline-none cursor-pointer"
             >
               {cases.map((c) => (
                 <option key={c.id} value={c.id}>
@@ -109,10 +115,14 @@ export function App() {
         </div>
       </header>
 
-      {/* Main content: Always shows the timeline for everyone */}
+      {/* Main content */}
       <main className="max-w-4xl mx-auto">
         {currentView === 'admin' ? (
-          <AdminDashboard token={token || ''} />
+          <AdminDashboard
+            token={token || ''}
+            cases={cases}
+            setCases={setCases}
+          />
         ) : selectedCaseId ? (
           <CaseTimeline caseId={selectedCaseId} token={token || ''} />
         ) : (

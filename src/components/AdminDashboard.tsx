@@ -14,17 +14,19 @@ interface UnlinkedVideo {
     estimated_event_date?: string;
     created_at: string;
     milestone_id?: string | null;
+
 }
 
 interface AdminDashboardProps {
     token: string;
+    cases: Array<{ id: string; title: string }>;
+    setCases: React.Dispatch<React.SetStateAction<Array<{ id: string; title: string }>>>; // Move them here!
 }
 
-export const AdminDashboard: React.FC<AdminDashboardProps> = ({ token }) => {
+export const AdminDashboard: React.FC<AdminDashboardProps> = ({ token, cases, setCases }) => {
     const [videos, setVideos] = useState<UnlinkedVideo[]>([]);
     const [loading, setLoading] = useState<boolean>(true);
     const [error, setError] = useState<string | null>(null);
-    const [cases, setCases] = useState<Array<{ id: string; title: string }>>([]);
     const [selectedCases, setSelectedCases] = useState<Record<string, string>>({});
     const [milestonesByCase, setMilestonesByCase] = useState<Record<string, Array<{ id: string; title: string }>>>({});
     const [milestoneFormCaseId, setMilestoneFormCaseId] = useState<string>('');
@@ -32,21 +34,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ token }) => {
     const [milestoneDescription, setMilestoneDescription] = useState<string>('');
     const [milestoneDate, setMilestoneDate] = useState<string>('');
 
+    interface AdminDashboardProps {
+        token: string;
+        cases: Array<{ id: string; title: string }>;
+        setCases: React.Dispatch<React.SetStateAction<Array<{ id: string; title: string }>>>;
+    }
+
     useEffect(() => {
-        const loadCases = async () => {
-            try {
-                const res = await fetch('/api/v1/cases', {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-                if (res.ok) {
-                    const data = await res.json();
-                    setCases(data || []);
-                }
-            } catch (err) {
-                console.error("Failed to load cases", err);
-            }
-        };
-        loadCases();
         loadAllVideos();
     }, [token]);
 
@@ -155,6 +149,34 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ token }) => {
             setError(err instanceof Error ? err.message : 'Error loading media library.');
         } finally {
             setLoading(false);
+        }
+    };
+
+    const handleDeleteCase = async (caseId: string, caseTitle: string) => {
+        if (!window.confirm(`Are you sure you want to delete "${caseTitle}"? This will remove all associated milestones and unhook any linked media.`)) {
+            return;
+        }
+
+        try {
+            const res = await fetch(`/api/v1/cases/${caseId}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${token}` },
+            });
+
+            if (!res.ok) {
+                const text = await res.text();
+                throw new Error(`Failed to delete case: ${text}`);
+            }
+
+            // Remove the deleted case from the parent's state (updates both Admin and Timeline header instantly)
+            setCases(prevCases => prevCases.filter(c => c.id !== caseId));
+
+            // Refresh the video list so newly unlinked videos appear in the queue instantly
+            loadAllVideos();
+
+            alert('Case successfully deleted.');
+        } catch (err: unknown) {
+            alert(err instanceof Error ? err.message : 'Error deleting case.');
         }
     };
 
@@ -336,7 +358,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ token }) => {
                         required
                     >
                         <option value="" disabled>Select Target Case...</option>
-                        {cases.map(c => (
+                        {cases?.map(c => (
                             <option key={c.id} value={c.id}>{c.title}</option>
                         ))}
                     </select>
@@ -391,8 +413,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ token }) => {
                     Total: {unlinkedVideos.length}
                 </span>
             </div>
-
-
 
             {unlinkedVideos.length === 0 ? (
                 <div className="text-center py-12 text-slate-500 border border-dashed border-slate-800 rounded-lg text-sm">
@@ -634,7 +654,49 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ token }) => {
                         ))}
                     </div>
                 )}
+            </div>{/* Case Management / Deletion Card */}
+            <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4 shadow-xl">
+                <div>
+                    <h3 className="text-base font-bold text-slate-100">Manage Cases</h3>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                        Select an existing case to delete it and automatically unlink its associated media.
+                    </p>
+                </div>
+
+                <div className="flex items-center gap-3">
+                    <select
+                        id="case-delete-select"
+                        className="flex-1 bg-slate-950 border border-slate-700 text-slate-300 text-xs rounded px-3 py-2 focus:border-blue-500 focus:outline-none"
+                        defaultValue=""
+                    >
+                        <option value="" disabled>Select case to delete...</option>
+                        {cases.map(c => (
+                            <option key={c.id} value={c.id}>{c.title}</option>
+                        ))}
+                    </select>
+
+                    <button
+                        type="button"
+                        onClick={() => {
+                            const selectElement = document.getElementById('case-delete-select') as HTMLSelectElement;
+                            const selectedCaseId = selectElement?.value;
+                            if (!selectedCaseId) {
+                                alert('Please select a case to delete first.');
+                                return;
+                            }
+                            const targetCase = cases.find(c => c.id === selectedCaseId);
+                            if (targetCase) {
+                                handleDeleteCase(targetCase.id, targetCase.title);
+                                selectElement.value = ''; // Reset dropdown after action
+                            }
+                        }}
+                        className="px-4 py-2 bg-red-950/80 hover:bg-red-900 text-red-300 border border-red-800 text-xs font-medium rounded transition-colors cursor-pointer shrink-0"
+                    >
+                        Delete Selected Case
+                    </button>
+                </div>
             </div>
+
         </div>
     );
 };
