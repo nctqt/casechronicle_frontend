@@ -1,89 +1,163 @@
-import React, { useState } from 'react';
+// src/App.tsx
+import React, { useState, useEffect } from 'react';
 import { CaseTimeline } from './components/CaseTimeline';
+import { AddCaseModal } from './components/AddCaseModal';
 import { LoginForm } from './components/LoginForm';
+import { parseJwt } from './utils/auth';
+import { AdminDashboard } from './components/AdminDashboard';
 
-export const App: React.FC = () => {
-  const [token, setToken] = useState<string | null>(() => {
-    const saved = localStorage.getItem('token');
-    return (saved && saved !== 'undefined' && saved !== 'null') ? saved : null;
-  });
-  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+interface CaseItem {
+  id: string;
+  title: string;
+}
 
-  // Default case ID or active case in view
-  const activeCaseId = 'c8bbf1a4-ecb6-4e8a-869a-de8e02489a86';
+export function App() {
+  const [token, setToken] = useState<string | null>(localStorage.getItem('token'));
+  const [cases, setCases] = useState<CaseItem[]>([]);
+  const [selectedCaseId, setSelectedCaseId] = useState<string>('');
+  const [isAddCaseOpen, setIsAddCaseOpen] = useState<boolean>(false);
+  const [isLoginOpen, setIsLoginOpen] = useState<boolean>(false);
+  const [currentView, setCurrentView] = useState<'timeline' | 'admin'>('timeline');
 
-  const handleLoginSuccess = (newToken: string) => {
-    localStorage.setItem('token', newToken);
-    setToken(newToken);
-    setIsAuthModalOpen(false);
-  };
+  const claims = parseJwt(token);
+  const isAdmin = claims?.role === 'admin';
 
   const handleLogout = () => {
     localStorage.removeItem('token');
     setToken(null);
+    window.location.reload();
   };
 
+  const loadCases = async () => {
+    try {
+      const res = await fetch('/api/v1/cases');
+      if (res.ok) {
+        const data = await res.json();
+        setCases(data);
+        if (data.length > 0 && !selectedCaseId) {
+          setSelectedCaseId(data[0].id);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to load cases list:', err);
+    }
+  };
+
+  useEffect(() => {
+    loadCases();
+  }, []);
+
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans">
-      {/* Header Navigation */}
-      <header className="border-b border-slate-800/80 bg-slate-900/50 backdrop-blur-md sticky top-0 z-40">
-        <div className="max-w-6xl mx-auto px-4 py-3.5 flex items-center justify-between">
+    <div className="min-h-screen bg-slate-950 text-slate-100 p-6">
+      <header className="max-w-4xl mx-auto mb-6 flex items-center justify-between border-b border-slate-800 pb-4">
+        <div className="flex items-center gap-4">
+          <h1 className="text-xl font-bold tracking-tight text-slate-100">True Crime Time Capsule</h1>
 
-          {/* App Title / Logo */}
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-blue-600/20 border border-blue-500/30 flex items-center justify-center text-blue-400 font-bold text-sm">
-              TC
-            </div>
-            <span className="font-bold text-slate-100 tracking-tight text-lg">
-              True Crime Time Capsule
-            </span>
-          </div>
+          {/* Case Selector Dropdown (Available to everyone) */}
+          {cases.length > 0 && (
+            <select
+              value={selectedCaseId}
+              onChange={(e) => setSelectedCaseId(e.target.value)}
+              className="bg-slate-900 border border-slate-800 text-slate-200 text-sm rounded-lg px-3 py-1.5 focus:border-blue-500 focus:outline-none"
+            >
+              {cases.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.title}
+                </option>
+              ))}
+            </select>
+          )}
+        </div>
 
-          {/* Dynamic Auth Button */}
-          <div>
-            {token ? (
+        {isAdmin && (
+          <button
+            onClick={() => setCurrentView(currentView === 'admin' ? 'timeline' : 'admin')}
+            className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-lg border border-slate-700 transition-colors cursor-pointer"
+          >
+            {currentView === 'admin' ? 'View Timeline' : 'Admin Dashboard'}
+          </button>
+        )}
+
+        {/* Right side: Auth & Admin Actions */}
+        <div className="flex items-center gap-3">
+          {token ? (
+            <>
               <button
                 onClick={handleLogout}
-                className="px-3.5 py-1.5 text-xs font-semibold text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700/80 border border-slate-700/60 rounded-lg transition-all cursor-pointer shadow-sm"
+                className="px-3 py-1.5 text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-300 rounded border border-slate-700 transition-colors cursor-pointer"
               >
                 Log Out
               </button>
-            ) : (
-              <button
-                onClick={() => setIsAuthModalOpen(true)}
-                className="px-4 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-500 rounded-lg shadow-md shadow-blue-600/20 transition-all cursor-pointer"
-              >
-                Sign In
-              </button>
-            )}
-          </div>
+
+              {isAdmin && (
+                <button
+                  onClick={() => setIsAddCaseOpen(true)}
+                  className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold rounded-lg shadow transition-colors cursor-pointer"
+                >
+                  + New Case
+                </button>
+              )}
+            </>
+          ) : (
+            <button
+              onClick={() => setIsLoginOpen(true)}
+              className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold rounded-lg shadow transition-colors cursor-pointer"
+            >
+              Log In
+            </button>
+          )}
         </div>
       </header>
 
-      {/* Main Content Area (Accessible whether logged in or out) */}
-      <main className="flex-1 py-8 px-4">
-        <CaseTimeline caseId={activeCaseId} token={token || ''} />
+      {/* Main content: Always shows the timeline for everyone */}
+      <main className="max-w-4xl mx-auto">
+        {currentView === 'admin' ? (
+          <AdminDashboard token={token || ''} />
+        ) : selectedCaseId ? (
+          <CaseTimeline caseId={selectedCaseId} token={token || ''} />
+        ) : (
+          <div className="text-center py-12 text-slate-500">
+            No cases available.
+          </div>
+        )}
       </main>
 
-      {/* Modal Overlay for Login / Register */}
-      {isAuthModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-          <div className="relative w-full max-w-md">
-            {/* Close button in top-right of modal */}
-            <button
-              onClick={() => setIsAuthModalOpen(false)}
-              className="absolute right-4 top-4 z-10 text-slate-400 hover:text-slate-200 transition-colors cursor-pointer p-1 rounded-lg hover:bg-slate-800/60"
-              aria-label="Close modal"
-            >
-              <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
+      {/* Add Case Modal (Admin Only) */}
+      {isAddCaseOpen && (
+        <AddCaseModal
+          token={token || ''}
+          onClose={() => setIsAddCaseOpen(false)}
+          onSuccess={(newCaseId) => {
+            setIsAddCaseOpen(false);
+            loadCases().then(() => {
+              if (newCaseId) setSelectedCaseId(newCaseId);
+            });
+          }}
+        />
+      )}
 
-            <LoginForm onLoginSuccess={handleLoginSuccess} />
+      {/* Login Modal */}
+      {isLoginOpen && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="max-w-md w-full relative">
+            <button
+              onClick={() => setIsLoginOpen(false)}
+              className="absolute top-4 right-4 text-slate-400 hover:text-slate-200 text-sm font-bold z-10 cursor-pointer"
+            >
+              ✕
+            </button>
+            <LoginForm
+              onLoginSuccess={(newToken) => {
+                localStorage.setItem('token', newToken);
+                setToken(newToken);
+                setIsLoginOpen(false);
+              }}
+            />
           </div>
         </div>
       )}
     </div>
   );
-};
+}
+
+export default App;

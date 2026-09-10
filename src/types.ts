@@ -12,7 +12,7 @@ export interface Video {
     title: string;
     channel_name: string;
     status: VideoStatus;
-    summary?: string;
+    ai_summary?: string;
     category?: string;
     estimated_event_date?: string;
     created_at: string;
