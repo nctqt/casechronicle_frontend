@@ -46,8 +46,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ token, cases, se
 
     const handleCreateMilestone = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!milestoneFormCaseId || !milestoneTitle.trim()) {
-            alert('Please select a case and enter a milestone title.');
+        if (!milestoneFormCaseId || !milestoneTitle.trim() || !milestoneDate) {
+            alert('Please select a case, enter a title, and pick a date.');
             return;
         }
 
@@ -61,7 +61,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ token, cases, se
                 body: JSON.stringify({
                     title: milestoneTitle.trim(),
                     description: milestoneDescription.trim(),
-                    estimated_date: milestoneDate ? new Date(milestoneDate).toISOString() : undefined,
+                    event_date: milestoneDate ? new Date(milestoneDate).toISOString() : undefined,
                 }),
             });
 
@@ -183,7 +183,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ token, cases, se
     const handleEnrichVideo = async (videoId: string) => {
         try {
             const res = await fetch(`/api/v1/videos/${videoId}/enrich`, {
-                method: 'POST',
+                method: 'PATCH',
                 headers: {
                     'Authorization': `Bearer ${token}`,
                 },
@@ -315,7 +315,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ token, cases, se
     const unlinkedVideos = videos.filter(v => !v.milestone_id);
     const unenrichedLinkedVideos = videos.filter(v =>
         v.milestone_id &&
-        (!v.ai_summary || !v.summary_source || v.summary_source === 'none' || v.summary_source === '')
+        ['pending', 'failed', 'analyzing'].includes(v.status)
     );
 
     if (loading) {
@@ -374,6 +374,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ token, cases, se
 
                     <input
                         type="date"
+                        required
                         value={milestoneDate}
                         onChange={(e) => setMilestoneDate(e.target.value)}
                         className="bg-slate-950 border border-slate-700 text-slate-300 text-xs rounded px-3 py-2 focus:border-blue-500 focus:outline-none"
@@ -409,139 +410,141 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ token, cases, se
                         Orphaned videos not currently assigned to any milestone timeline.
                     </p>
                 </div>
-                <span className="px-2.5 py-1 bg-slate-800 border border-slate-700 text-slate-300 text-xs font-mono rounded-lg">
+                <span className="px-2.5 py-1 bg-amber-950/40 border border-amber-800/60 text-amber-300 text-xs font-mono rounded-lg">
                     Total: {unlinkedVideos.length}
                 </span>
             </div>
 
-            {unlinkedVideos.length === 0 ? (
-                <div className="text-center py-12 text-slate-500 border border-dashed border-slate-800 rounded-lg text-sm">
-                    No unlinked media found in the queue.
-                </div>
-            ) : (
-                <div className="space-y-3">
-                    {unlinkedVideos.map((video) => (
-                        <div
-                            key={video.id}
-                            className="bg-slate-900 border border-slate-800 rounded-xl p-4 grid grid-cols-1 lg:grid-cols-3 gap-4 items-start shadow-xl hover:border-slate-700 transition-colors"
-                        >
-                            <div className="lg:col-span-2 space-y-2 min-w-0">
-                                <div className="flex items-baseline gap-2 min-w-0">
-                                    <h4 className="text-sm font-medium text-slate-200 truncate">
-                                        {video.title || video.youtube_video_id}
-                                    </h4>
-                                    {video.channel_name && (
-                                        <span className="text-xs text-slate-400 shrink-0">
-                                            • {video.channel_name}
+            {
+                unlinkedVideos.length === 0 ? (
+                    <div className="text-center py-12 text-slate-500 border border-dashed border-slate-800 rounded-lg text-sm">
+                        No unlinked media found in the queue.
+                    </div>
+                ) : (
+                    <div className="space-y-3">
+                        {unlinkedVideos.map((video) => (
+                            <div
+                                key={video.id}
+                                className="bg-slate-900 border border-slate-800 rounded-xl p-4 grid grid-cols-1 lg:grid-cols-3 gap-4 items-start shadow-xl hover:border-slate-700 transition-colors"
+                            >
+                                <div className="lg:col-span-2 space-y-2 min-w-0">
+                                    <div className="flex items-baseline gap-2 min-w-0">
+                                        <h4 className="text-sm font-medium text-slate-200 truncate">
+                                            {video.title || video.youtube_video_id}
+                                        </h4>
+                                        {video.channel_name && (
+                                            <span className="text-xs text-slate-400 shrink-0">
+                                                • {video.channel_name}
+                                            </span>
+                                        )}
+                                    </div>
+
+                                    <div className="flex items-center gap-3 text-xs text-slate-400 flex-wrap">
+                                        {video.estimated_event_date && (
+                                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-950/40 border border-blue-800/60 text-blue-300">
+                                                Event Date: {(() => {
+                                                    const val = video.estimated_event_date;
+                                                    const dateStr = typeof val === 'object' && val !== null && 'Time' in val
+                                                        ? (val as { Time: string }).Time
+                                                        : String(val);
+                                                    return dateStr.includes('T') ? dateStr.split('T')[0] : dateStr;
+                                                })()}
+                                            </span>
+                                        )}
+
+                                        <span className={`text-[10px] px-1.5 py-0.5 rounded border ${video.summary_source && video.summary_source !== 'metadata'
+                                            ? 'bg-slate-800 border-slate-700 text-slate-300'
+                                            : 'bg-amber-950/50 border-amber-800/60 text-amber-300'
+                                            }`}>
+                                            Source: {video.ai_summary ? (video.summary_source || 'metadata') : 'none'}
                                         </span>
+
+                                        <select
+                                            value={video.category || 'general'}
+                                            onChange={(e) => handleVideoCategoryChange(video.id, e.target.value)}
+                                            className="bg-slate-950 border border-slate-700 text-slate-300 text-[11px] rounded px-1.5 py-0.5 focus:border-blue-500 focus:outline-none cursor-pointer"
+                                            title="Change Category"
+                                        >
+                                            <option value="interview">Interview</option>
+                                            <option value="news">News Broadcast</option>
+                                            <option value="bodycam">Bodycam / Footage</option>
+                                            <option value="analysis">Creator Analysis</option>
+                                            <option value="general">General</option>
+                                        </select>
+
+                                        <select
+                                            value={video.status || 'pending_review'}
+                                            onChange={(e) => handleVideoStatusChange(video.id, e.target.value)}
+                                            className="bg-slate-950 border border-slate-700 text-slate-300 text-[11px] rounded px-1.5 py-0.5 focus:border-blue-500 focus:outline-none cursor-pointer"
+                                            title="Change Pipeline Status"
+                                        >
+                                            <option value="pending_review">Pending Review</option>
+                                            <option value="analyzed">Analyzed</option>
+                                            <option value="analyzing">Analyzing</option>
+                                            <option value="failed">Failed</option>
+                                        </select>
+                                    </div>
+
+                                    {(video.ai_summary || video.description) && (
+                                        <p className="text-xs text-slate-400 bg-slate-950/40 p-2.5 rounded border border-slate-800/60 max-h-32 overflow-y-auto whitespace-pre-wrap">
+                                            <span className="font-semibold text-slate-300">Summary:</span> {video.ai_summary}
+                                        </p>
                                     )}
                                 </div>
 
-                                <div className="flex items-center gap-3 text-xs text-slate-400 flex-wrap">
-                                    {video.estimated_event_date && (
-                                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-950/40 border border-blue-800/60 text-blue-300">
-                                            Event Date: {(() => {
-                                                const val = video.estimated_event_date;
-                                                const dateStr = typeof val === 'object' && val !== null && 'Time' in val
-                                                    ? (val as { Time: string }).Time
-                                                    : String(val);
-                                                return dateStr.includes('T') ? dateStr.split('T')[0] : dateStr;
-                                            })()}
-                                        </span>
-                                    )}
+                                <div className="flex flex-col justify-between h-full gap-3">
+                                    <div className="flex items-center justify-end gap-2">
+                                        <button
+                                            onClick={() => handleEnrichVideo(video.id)}
+                                            className="px-2.5 py-1 text-xs font-medium bg-purple-950/60 hover:bg-purple-900/80 text-purple-300 border border-purple-800/80 rounded transition-colors cursor-pointer"
+                                            title="Trigger AI summary enrichment pipeline"
+                                        >
+                                            Enrich via AI
+                                        </button>
+                                        <a
+                                            href={`https://youtube.com/watch?v=${video.youtube_video_id}`}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="px-2.5 py-1 text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 rounded transition-colors flex items-center gap-1.5"
+                                        >
+                                            <span>Watch</span>
+                                            <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                                            </svg>
+                                        </a>
+                                    </div>
 
-                                    <span className={`text-[10px] px-1.5 py-0.5 rounded border ${video.summary_source && video.summary_source !== 'metadata'
-                                        ? 'bg-slate-800 border-slate-700 text-slate-300'
-                                        : 'bg-amber-950/50 border-amber-800/60 text-amber-300'
-                                        }`}>
-                                        Source: {video.ai_summary ? (video.summary_source || 'metadata') : 'none'}
-                                    </span>
-
-                                    <select
-                                        value={video.category || 'general'}
-                                        onChange={(e) => handleVideoCategoryChange(video.id, e.target.value)}
-                                        className="bg-slate-950 border border-slate-700 text-slate-300 text-[11px] rounded px-1.5 py-0.5 focus:border-blue-500 focus:outline-none cursor-pointer"
-                                        title="Change Category"
-                                    >
-                                        <option value="interview">Interview</option>
-                                        <option value="news">News Broadcast</option>
-                                        <option value="bodycam">Bodycam / Footage</option>
-                                        <option value="analysis">Creator Analysis</option>
-                                        <option value="general">General</option>
-                                    </select>
-
-                                    <select
-                                        value={video.status || 'pending_review'}
-                                        onChange={(e) => handleVideoStatusChange(video.id, e.target.value)}
-                                        className="bg-slate-950 border border-slate-700 text-slate-300 text-[11px] rounded px-1.5 py-0.5 focus:border-blue-500 focus:outline-none cursor-pointer"
-                                        title="Change Pipeline Status"
-                                    >
-                                        <option value="pending_review">Pending Review</option>
-                                        <option value="analyzed">Analyzed</option>
-                                        <option value="analyzing">Analyzing</option>
-                                        <option value="failed">Failed</option>
-                                    </select>
-                                </div>
-
-                                {(video.ai_summary || video.description) && (
-                                    <p className="text-xs text-slate-400 bg-slate-950/40 p-2.5 rounded border border-slate-800/60 max-h-32 overflow-y-auto whitespace-pre-wrap">
-                                        <span className="font-semibold text-slate-300">Summary:</span> {video.ai_summary}
-                                    </p>
-                                )}
-                            </div>
-
-                            <div className="flex flex-col justify-between h-full gap-3">
-                                <div className="flex items-center justify-end gap-2">
-                                    <button
-                                        onClick={() => handleEnrichVideo(video.id)}
-                                        className="px-2.5 py-1 text-xs font-medium bg-purple-950/60 hover:bg-purple-900/80 text-purple-300 border border-purple-800/80 rounded transition-colors cursor-pointer"
-                                        title="Trigger AI summary enrichment pipeline"
-                                    >
-                                        Enrich via AI
-                                    </button>
-                                    <a
-                                        href={`https://youtube.com/watch?v=${video.youtube_video_id}`}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="px-2.5 py-1 text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 rounded transition-colors flex items-center gap-1.5"
-                                    >
-                                        <span>Watch</span>
-                                        <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                                        </svg>
-                                    </a>
-                                </div>
-
-                                <div className="bg-slate-950/60 border border-slate-800/80 rounded p-2 flex flex-col gap-1.5">
-                                    <span className="text-[9px] uppercase tracking-wider text-slate-400 font-semibold">Attach to Milestone</span>
-                                    <select
-                                        onChange={(e) => handleCaseSelection(video.id, e.target.value)}
-                                        className="bg-slate-900 border border-slate-700 text-slate-300 text-[11px] rounded px-1.5 py-1 focus:border-blue-500 focus:outline-none w-full"
-                                        defaultValue=""
-                                    >
-                                        <option value="" disabled>Select Case...</option>
-                                        {cases.map(c => (
-                                            <option key={c.id} value={c.id}>{c.title}</option>
-                                        ))}
-                                    </select>
-                                    <select
-                                        id={`milestone-select-${video.id}`}
-                                        disabled={!selectedCases[video.id]}
-                                        onChange={(e) => handleLinkVideoToMilestone(video.id, e.target.value)}
-                                        className="bg-slate-900 border border-slate-700 text-slate-300 text-[11px] rounded px-1.5 py-1 focus:border-blue-500 focus:outline-none w-full disabled:opacity-40 disabled:cursor-not-allowed"
-                                        defaultValue=""
-                                    >
-                                        <option value="" disabled>Select Milestone...</option>
-                                        {(milestonesByCase[selectedCases[video.id]] || []).map(m => (
-                                            <option key={m.id} value={m.id}>{m.title}</option>
-                                        ))}
-                                    </select>
+                                    <div className="bg-slate-950/60 border border-slate-800/80 rounded p-2 flex flex-col gap-1.5">
+                                        <span className="text-[9px] uppercase tracking-wider text-slate-400 font-semibold">Attach to Milestone</span>
+                                        <select
+                                            onChange={(e) => handleCaseSelection(video.id, e.target.value)}
+                                            className="bg-slate-900 border border-slate-700 text-slate-300 text-[11px] rounded px-1.5 py-1 focus:border-blue-500 focus:outline-none w-full"
+                                            defaultValue=""
+                                        >
+                                            <option value="" disabled>Select Case...</option>
+                                            {cases.map(c => (
+                                                <option key={c.id} value={c.id}>{c.title}</option>
+                                            ))}
+                                        </select>
+                                        <select
+                                            id={`milestone-select-${video.id}`}
+                                            disabled={!selectedCases[video.id]}
+                                            onChange={(e) => handleLinkVideoToMilestone(video.id, e.target.value)}
+                                            className="bg-slate-900 border border-slate-700 text-slate-300 text-[11px] rounded px-1.5 py-1 focus:border-blue-500 focus:outline-none w-full disabled:opacity-40 disabled:cursor-not-allowed"
+                                            defaultValue=""
+                                        >
+                                            <option value="" disabled>Select Milestone...</option>
+                                            {(milestonesByCase[selectedCases[video.id]] || []).map(m => (
+                                                <option key={m.id} value={m.id}>{m.title}</option>
+                                            ))}
+                                        </select>
+                                    </div>
                                 </div>
                             </div>
-                        </div>
-                    ))}
-                </div>
-            )}
+                        ))}
+                    </div>
+                )
+            }
 
             {/* Bottom Section: Active/Linked Enrichment Queue */}
             <div className="space-y-6 mt-10 border-t border-slate-800 pt-8">
@@ -697,6 +700,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ token, cases, se
                 </div>
             </div>
 
-        </div>
+        </div >
     );
 };

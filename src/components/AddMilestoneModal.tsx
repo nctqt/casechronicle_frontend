@@ -92,6 +92,7 @@ export const AddMilestoneModal: React.FC<AddMilestoneModalProps> = ({
                         </label>
                         <input
                             type="date"
+                            required
                             value={eventDate}
                             onChange={(e) => setEventDate(e.target.value)}
                             className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded text-slate-100 text-sm focus:border-blue-500 focus:outline-none text-slate-300"

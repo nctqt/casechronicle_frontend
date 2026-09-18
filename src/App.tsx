@@ -3,8 +3,8 @@ import React, { useState, useEffect } from 'react';
 import { CaseTimeline } from './components/CaseTimeline';
 import { AddCaseModal } from './components/AddCaseModal';
 import { LoginForm } from './components/LoginForm';
-import { parseJwt } from './utils/auth';
 import { AdminDashboard } from './components/AdminDashboard';
+import { listCases, parseJwt } from './api';
 
 interface CaseItem {
   id: string;
@@ -31,18 +31,11 @@ export function App() {
 
   const loadCases = async () => {
     try {
-      // Include authorization token if required by your backend routes, 
-      // or keep it public if your GET cases endpoint is public.
-      const headers: Record<string, string> = {};
-      if (token) headers['Authorization'] = `Bearer ${token}`;
-
-      const res = await fetch('/api/v1/cases', { headers });
-      if (res.ok) {
-        const data = await res.json();
-        setCases(data || []);
-        if (data.length > 0 && !selectedCaseId) {
-          setSelectedCaseId(data[0].id);
-        }
+      // Utilizing the centralized API wrapper from src/api.ts
+      const data = await listCases();
+      setCases(data || []);
+      if (data.length > 0 && !selectedCaseId) {
+        setSelectedCaseId(data[0].id);
       }
     } catch (err) {
       console.error('Failed to load cases list:', err);
@@ -124,7 +117,11 @@ export function App() {
             setCases={setCases}
           />
         ) : selectedCaseId ? (
-          <CaseTimeline caseId={selectedCaseId} token={token || ''} />
+          <CaseTimeline
+            caseId={selectedCaseId}
+            token={token || ''}
+            onCaseUpdated={loadCases}
+          />
         ) : (
           <div className="text-center py-12 text-slate-500">
             No cases available.
